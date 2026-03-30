@@ -14,85 +14,21 @@ model User {
   password  String
   role      Role     @default(LAWYER)
   createdAt DateTime @default(now())
-
-  lawyer    Lawyer?
-}
-
-model Lawyer {
-  id     String @id @default(uuid())
-  userId String @unique
-  oab    String
-
-  user      User      @relation(fields: [userId], references: [id])
-  processes Process[]
-}
-
-model Client {
-  id        String   @id @default(uuid())
-  name      String
-  cpfCnpj   String?
-  email     String?
-  phone     String?
-  createdAt DateTime @default(now())
-
-  processes Process[]
 }
 
 model Process {
   id        String   @id @default(uuid())
   number    String
-  court     String
+  client    String
   status    ProcessStatus @default(ACTIVE)
   createdAt DateTime @default(now())
 
-  clientId  String
-  lawyerId  String
-
-  client   Client @relation(fields: [clientId], references: [id])
-  lawyer   Lawyer @relation(fields: [lawyerId], references: [id])
-
-  movements   Movement[]
-  deadlines   Deadline[]
-  attachments Attachment[]
-  notifications Notification[]
+  movements Movement[]
 }
 
 model Movement {
   id        String   @id @default(uuid())
   title     String
-  description String?
-  date      DateTime
-  source    String
-
-  processId String
-  process   Process @relation(fields: [processId], references: [id])
-}
-
-model Deadline {
-  id        String   @id @default(uuid())
-  title     String
-  dueDate   DateTime
-  status    DeadlineStatus @default(PENDING)
-
-  processId String
-  process   Process @relation(fields: [processId], references: [id])
-}
-
-model Attachment {
-  id        String   @id @default(uuid())
-  url       String
-  type      String
-  createdAt DateTime @default(now())
-
-  processId String
-  process   Process @relation(fields: [processId], references: [id])
-}
-
-model Notification {
-  id        String   @id @default(uuid())
-  type      String
-  message   String
-  read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
   processId String
@@ -109,10 +45,4 @@ enum ProcessStatus {
   ACTIVE
   CLOSED
   SUSPENDED
-}
-
-enum DeadlineStatus {
-  PENDING
-  DONE
-  LATE
 }

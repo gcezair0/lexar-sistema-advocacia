@@ -1,18 +1,36 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { AuthService } from '../service/auth.service'
 import { UserRepository } from '../../users/repository/user.repository'
+import {
+  loginSchema,
+  registerSchema,
+  refreshTokenSchema,
+} from '../schemas/auth.schema'
 
 export class AuthController {
   private service = new AuthService(new UserRepository())
 
-  async login(req: FastifyRequest, reply: FastifyReply) {
-    const { email, password } = req.body as { email: string; password: string }
+  register = async (req: FastifyRequest, reply: FastifyReply) => {
+    const data = registerSchema.parse(req.body)
+    const result = await this.service.register(data)
+    return reply.status(201).send(result)
+  }
 
-    try {
-      const result = await this.service.login(email, password)
-      return reply.send(result)
-    } catch (err: any) {
-      return reply.status(401).send({ message: err.message })
-    }
+  login = async (req: FastifyRequest, reply: FastifyReply) => {
+    const { email, password } = loginSchema.parse(req.body)
+    const result = await this.service.login(email, password)
+    return reply.send(result)
+  }
+
+  refresh = async (req: FastifyRequest, reply: FastifyReply) => {
+    const { refreshToken } = refreshTokenSchema.parse(req.body)
+    const result = await this.service.refreshToken(refreshToken)
+    return reply.send(result)
+  }
+
+  logout = async (req: FastifyRequest, reply: FastifyReply) => {
+    const { refreshToken } = refreshTokenSchema.parse(req.body)
+    const result = await this.service.logout(refreshToken)
+    return reply.send(result)
   }
 }

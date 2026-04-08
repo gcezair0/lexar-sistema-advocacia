@@ -7,33 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(LAWYER)
-  createdAt DateTime @default(now())
-}
-
-model Process {
-  id        String   @id @default(uuid())
-  number    String
-  client    String
-  status    ProcessStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
-
-  movements Movement[]
-}
-
-model Movement {
-  id        String   @id @default(uuid())
-  title     String
-  createdAt DateTime @default(now())
-
-  processId String
-  process   Process @relation(fields: [processId], references: [id])
-}
+// ─── ENUMS ──────────────────────────────────────────
 
 enum Role {
   ADMIN
@@ -45,4 +19,300 @@ enum ProcessStatus {
   ACTIVE
   CLOSED
   SUSPENDED
+  ARCHIVED
+}
+
+enum ClientStatus {
+  LEAD
+  ACTIVE
+  INACTIVE
+}
+
+enum EventType {
+  HEARING
+  DEADLINE
+  MEETING
+  TASK
+}
+
+enum ChatSessionStatus {
+  BOT
+  HUMAN
+  CLOSED
+}
+
+enum NotificationType {
+  WHATSAPP
+  EMAIL
+  SYSTEM
+}
+
+enum DocumentCategory {
+  CONTRACT
+  PETITION
+  EVIDENCE
+  COURT_ORDER
+  OTHER
+}
+
+// ─── OFFICE (MULTI-TENANT) ──────────────────────────
+
+model Office {
+  id        String   @id @default(cuid())
+  name      String
+  cnpj      String?  @unique
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  clients       Client[]
+  processes     Process[]
+  documents     Document[]
+  events        Event[]
+  chatSessions  ChatSession[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  leads         Lead[]
+}
+
+// ─── USER ───────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(LAWYER)
+  oabNumber String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+
+  refreshTokens  RefreshToken[]
+  assignedEvents Event[]        @relation("AssignedEvents")
+  chatMessages   ChatMessage[]
+  auditLogs      AuditLog[]
+  processes      Process[]      @relation("LawyerProcesses")
+}
+
+// ─── CLIENT ─────────────────────────────────────────
+
+model Client {
+  id           String       @id @default(cuid())
+  name         String
+  email        String?
+  phone        String?
+  cpfCnpj      String?      @unique
+  address      String?
+  status       ClientStatus @default(LEAD)
+  tags         String[]
+  notes        String?
+  lgpdConsent  Boolean      @default(false)
+  consentDate  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+
+  processes    Process[]
+  documents    Document[]
+  chatSessions ChatSession[]
+  events       Event[]
+}
+
+// ─── PROCESS ────────────────────────────────────────
+
+model Process {
+  id            String        @id @default(cuid())
+  number        String
+  title         String
+  description   String?
+  court         String?
+  actionType    String?
+  status        ProcessStatus @default(ACTIVE)
+  distributedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  lawyerId String?
+  lawyer   User?   @relation("LawyerProcesses", fields: [lawyerId], references: [id])
+
+  movements Movement[]
+  documents Document[]
+  events    Event[]
+}
+
+// ─── MOVEMENT (TIMELINE) ───────────────────────────
+
+model Movement {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+
+  processId String
+  process   Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+}
+
+// ─── DOCUMENT ───────────────────────────────────────
+
+model Document {
+  id          String           @id @default(cuid())
+  name        String
+  originalName String
+  mimeType    String
+  size        Int
+  path        String
+  category    DocumentCategory @default(OTHER)
+  version     Int              @default(1)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+
+  processId String?
+  process   Process? @relation(fields: [processId], references: [id])
+}
+
+// ─── EVENT / AGENDA ─────────────────────────────────
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  type        EventType @default(TASK)
+  startDate   DateTime
+  endDate     DateTime?
+  allDay      Boolean   @default(false)
+  completed   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?    @relation("AssignedEvents", fields: [assignedToId], references: [id])
+
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+
+  processId String?
+  process   Process? @relation(fields: [processId], references: [id])
+}
+
+// ─── CHAT SESSION ───────────────────────────────────
+
+model ChatSession {
+  id        String            @id @default(cuid())
+  phone     String
+  status    ChatSessionStatus @default(BOT)
+  metadata  Json?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  messages ChatMessage[]
+}
+
+// ─── CHAT MESSAGE ───────────────────────────────────
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  content   String
+  fromBot   Boolean  @default(false)
+  mediaUrl  String?
+  mediaType String?
+  createdAt DateTime @default(now())
+
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+}
+
+// ─── NOTIFICATION ───────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  read      Boolean          @default(false)
+  sentAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  officeId  String
+  office    Office @relation(fields: [officeId], references: [id])
+
+  targetUserId String?
+  targetPhone  String?
+}
+
+// ─── LEAD ───────────────────────────────────────────
+
+model Lead {
+  id           String   @id @default(cuid())
+  name         String?
+  phone        String
+  legalIssue   String?
+  source       String   @default("whatsapp")
+  converted    Boolean  @default(false)
+  convertedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+}
+
+// ─── AUDIT LOG ──────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  officeId String
+  office   Office @relation(fields: [officeId], references: [id])
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+}
+
+// ─── REFRESH TOKEN ──────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
